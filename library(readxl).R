@@ -1,0 +1,320 @@
+library(readxl)
+library(ggplot2)
+allfiles<- list()
+csv_files1 <- list.files(path = "C:/Users/user/Desktop/r term project/nizambad", pattern = ".csv", full.names = TRUE)
+nizambad <- list()
+csv_files2 <- list.files(path = "C:/Users/user/Desktop/r term project/jagtial", pattern = ".csv", full.names = TRUE)
+jagtiyal <- list()
+csv_files3 <- list.files(path = "C:/Users/user/Desktop/r term project/jayashankar", pattern = ".csv", full.names = TRUE)
+jayashankar <- list()
+csv_files4 <- list.files(path = "C:/Users/user/Desktop/r term project/karimnagar", pattern = ".csv", full.names = TRUE)
+karimnagar <- list()
+csv_files5 <- list.files(path = "C:/Users/user/Desktop/r term project/peddapalli", pattern = ".csv", full.names = TRUE)
+pedapalli <- list()
+
+# Loop through the list of CSV files and read each file
+
+for (csv_file in csv_files1) {
+    data <- read.csv(csv_file)
+    nizambad[[csv_file]] <- data
+}
+
+for (csv_file in csv_files2) {
+  data <- read.csv(csv_file)
+  jagtiyal[[csv_file]] <- data
+}
+
+for (csv_file in csv_files3) {
+  data <- read.csv(csv_file)
+  jayashankar[[csv_file]] <- data
+}
+
+for (csv_file in csv_files4) {
+  data <- read.csv(csv_file)
+  karimnagar[[csv_file]] <- data
+}
+
+for (csv_file in csv_files5) {
+  data <- read.csv(csv_file)
+  pedapalli[[csv_file]] <- data
+}
+
+#to find average of all points of a district
+GridSum<- function(csv_files){
+  totdata<- data.frame(DateTime= character(),rainfall= numeric() )
+  
+  for (csv_file in csv_files) {
+    data <- read.csv(csv_file)
+    totdata<- merge(totdata, data, by = "DateTime", all = TRUE)
+  }
+  
+  totdata$rainfall<- rowSums(totdata[3:ncol(totdata)])
+  totdata$rainfall<- totdata$rainfall/length(csv_files)
+  return(totdata[,1:2])
+}
+
+Nizambad<- as.data.frame(GridSum(csv_files1))
+Jagtial<- as.data.frame(GridSum(csv_files2))
+Jayashankar_Bhupalpally<- as.data.frame(GridSum(csv_files3))
+Karimnagar<- as.data.frame(GridSum(csv_files4))
+Pedapalli<- as.data.frame(GridSum(csv_files5))
+
+#function to find statistical measures
+statistics<- function(x){
+  
+  
+  #statistical measures
+  len<- length(x[,2])
+  #mean
+  avg1<- mean(x[,2])
+  
+  #median
+  med1<- median(x[,2])
+ 
+  #mode
+  freq<- table(x[,2])
+  mode0<- as.numeric(names(freq[freq==max(freq)]))
+ 
+  #standard deviation
+  std1<- sd(x[,2])
+  
+  #skewness
+  skew1<- sum((x[,2]-avg1)^3)/((len-1)*std1^3)
+ 
+  #kurtosis
+  kur1<- sum((x[,2]-avg1)^4)/((len-1)*std1^4)
+  
+  #interquartile range
+  iqr1= IQR(x[,2])
+  
+  #median absolute deviation
+  mad_data<- abs(x[,2]-med1)
+  sorted_mad_data<- sort(mad_data)
+  if(len%%2==0)
+  {
+    mad1<- (sorted_mad_data[len/2]+sorted_mad_data[len/2+1])/2
+  }else
+  {
+    mad1<- sorted_mad_data[(len+1)/2]
+  }
+  
+  my_table<-data.frame( NAME=  deparse(substitute(x)), MEAN= avg1, MEDIAN= med1, MODE= mode0, STANDARD_DEVIATION=std1, SKEWNESS= skew1, KURTOSIS= kur1, IQR= iqr1, MAD=mad1)
+  
+}
+
+tableNZ<- statistics(Nizambad)
+tableJG<- statistics(Jagtial)
+tableJB<- statistics(Jayashankar_Bhupalpally)
+tableKA<- statistics(Karimnagar)
+tablePD<- statistics(Pedapalli)
+statTable<- rbind(tableNZ, tableJG, tableJB, tableKA, tablePD)
+
+
+#function to change daily to monthly data
+conMonthly<- function(x){
+  
+  x$year<- strftime(x$DateTime, '%Y')
+  x$month<- strftime(x$DateTime, '%m')
+  x$monyear<- strftime(x$DateTime, '%Y-%m')
+  monthlydata<- aggregate(rainfall~month+year,x,FUN=sum)
+  monthlydata$monthyear<- paste(monthlydata$year, monthlydata$month, sep = '-')
+  return(monthlydata)
+}
+
+#function to change daily to yearly data
+conYearly<- function(x){
+  
+  x$year<- strftime(x$DateTime, '%Y')
+  yearlydata<- aggregate(rainfall~year,x,FUN=sum)
+  return(yearlydata)
+}
+
+#function to monthly to seasonal
+
+library(zoo)
+library(lubridate)
+conSeas<-function(data){
+data$DateTime <- as.Date(data$DateTime, format = "%Y-%m-%d")
+ts_data <- zoo(data$rainfall, data$DateTime)
+seasonal_data<- data.frame()
+
+#to get the months falling in different seasons
+get_season <- function(month) {
+  if (month %in% c(12, 1, 2)) {
+    return("Winter")
+  } else if (month %in% c(3, 4, 5)) {
+    return("Spring")
+  } else if (month %in% c(6, 7, 8)) {
+    return("Summer")
+  } else {
+    return("Fall")
+  }
+}
+data$Year <- year(data$DateTime)
+data$Month <- month(data$DateTime)
+data$Season <- sapply(data$Month, get_season)
+seasons<- c('Winter', 'Spring', 'Summer', 'Fall')
+
+for (year in unique(data$Year)) {
+  for (season in seasons) {
+    year_season_data <- subset(data, Year == year & Season == season)
+    total_rainfall <- sum(year_season_data$rainfall, na.rm = TRUE)
+    seasonal_data <- rbind(seasonal_data, data.frame(Year = year, Season = season, TotalRainfall = total_rainfall))
+  }
+}
+return(seasonal_data)
+}
+
+#calculating the y,s,m values
+monthNZ<- conMonthly(Nizambad)
+yearlyNZ<-conYearly(Nizambad)
+seasonalNZ<-conSeas(Nizambad)
+yearlyJG<- conYearly(Jagtial)
+#function for plotting
+plots1<-function(data,monthly_data,yearly_data,seasonal_data){
+#daily plot
+d<-ggplot(data, aes(x= DateTime, y=rainfall, group =1))+geom_line(color='red')+geom_point(color='blue')+xlab("Time")+ylab("Daily rainfall")+ggtitle("Daily rainfall Time Series")
+
+#monthly plot
+m<-ggplot(monthly_data, aes(x= monthyear, y=rainfall,group=1))+geom_line(color='green')+geom_point(color='yellow')+xlab("Time")+ylab("Monthly rainfall")+ggtitle("Monthly rainfall Time Series")
+mb<-ggplot(monthly_data, aes(x= month, y=rainfall, group= month))+geom_boxplot()+ scale_x_discrete(breaks = seq(1,12,by=1))
+
+#yearly plot
+y<-ggplot(yearly_data, aes(x= year, y=rainfall,group=1))+geom_line(color='orange')+geom_point(color='magenta')+xlab("Time")+ylab("Yearly rainfall")+ggtitle("Yearly rainfall Time Series")
+#seasonal plot
+s<-ggplot(data = seasonal_data, aes(x = Year, y = TotalRainfall, color= Season)) + geom_point()+geom_line()+facet_wrap(~ Season, scales = "free_y")+
+labs(title = "Seasonal Rainfall Time Series", x = "Year",   y = "Total Rainfall") +  scale_color_manual(values = c("Winter" = "blue", "Spring" = "green", "Summer" = "red", "Fall" = "orange")) +theme_minimal()
+
+plotlist<-list(m,mb,y,s)
+return(plotlist)
+}
+
+
+#plotting
+plotNZ<-plots1(Nizambad,monthNZ,yearlyNZ,seasonalNZ)
+
+
+#quantile plots
+quantileplots<-function(monthlydata,yearlydata,dailydata){
+  
+  par(mfrow=c(1,1))
+qm<-qqnorm(monthlydata$rainfall)
+qqline(monthlydata$rainfall)
+qy<-qqnorm(yearlydata$rainfall)
+qqline(yearlydata$rainfall)
+qd<-qqnorm(dailydata$rainfall)
+qqline(dailydata$rainfall)
+qlist<-list(qd,qm,qy)
+return(qlist)
+}
+qNZ<-quantileplots(monthNZ,yearlyNZ,Nizambad)
+
+
+
+# Define a custom function to get the second-highest maximum
+
+second_max <- function(x) {
+  sorted_x <- sort(x, decreasing = TRUE)
+  if (length(sorted_x) >= 2) {
+    return(sorted_x[2])
+    
+  }
+}
+
+
+#find max 
+
+tablemax<- function(data){
+  data$year<- strftime(data$DateTime, '%Y')
+result <- aggregate(rainfall ~ year, data = data, FUN = function(x) c(Maximum = max(x), Second_Maximum = second_max(x)))
+
+result$year<-as.numeric(result$year)
+return(result)
+}
+
+plotmax<- function(result){
+ggplot(result, aes(x = year)) +  geom_line(aes(y =rainfall[,"Maximum"] , color = "Maximum",group=1), size = 1) +  geom_line(aes(y =  rainfall[,"Second_Maximum"], color = "Second Maximum", group=2), size = 1) +  scale_color_manual(values = c("Maximum" = "red", "Second Maximum" = "blue")) +  labs(x = "Year", y = "RAINFALL", color = "Legend") +  theme_minimal()+ scale_x_continuous(breaks = seq(1950,2021,by=10))
+
+}
+
+maxNZ<- tablemax(Nizambad)
+pmaxNZ<- plotmax(maxNZ)
+print(pmaxNZ)
+
+#correlation between first and second max.
+corr<-function(x){
+  c<-cor(x$rainfall[,"Maximum"], x$rainfall[,"Second_Maximum"])
+  return(c)
+}
+
+calculate_yearly_rainfall_probability <- function(rainfall_data) {
+  
+  # Extract the year from the date
+  rainfall_data$year <- strftime(rainfall_data$DateTime, "%Y")
+  
+  # Calculate the probability of rainfall for each year
+  probability_by_year <- aggregate(rainfall_data$rainfall > 0, by = list(year = rainfall_data$year), FUN = mean)
+  
+  # Rename the columns for clarity
+  colnames(probability_by_year) <- c("Year", "RainfallProbability")
+  
+  return(probability_by_year)
+}
+
+
+NZprob<- calculate_yearly_rainfall_probability(Nizambad)
+
+
+#correlation and plotting between the districts
+
+cor1to1<-function(x,y){
+  one2one_dist<-cor(x$rainfall,y$rainfall)
+  return(one2one_dist)
+}
+#Correlation Matrix of all dist.
+library(corrplot)
+combined_data<-cbind(Nizambad$rainfall,Jagtial$rainfall,Jayashankar_Bhupalpally$rainfall,Karimnagar$rainfall,Pedapalli$rainfall)
+colnames(combined_data)<-c("Nizambad",'Jagtial',"Jayashankar_Bhupalpally","Karimnagar","Pedapalli")
+combinedcor<-cor(combined_data)
+corrplot(combinedcor,method="number")
+
+
+# Scatter plot with trend line for yearly data
+ggplot(merged_yearly_data, aes(x = Nizambad$rainfall, y = Jagtial$rainfall)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +
+  labs(title = "Scatter Plot and Trend Line: Yearly Rainfal",
+       x = "1 Yearly Rainfall",
+       y = "2 Yearly Rainfall")
+
+#plot riyal#########################################################
+
+
+lmao<- data.frame()
+lmao<- as.data.frame(cbind(yearlyJG$year, yearlyNZ$rainfall, yearlyJG$rainfall))
+colnames(lmao)<- c('year', 'Nizambad', 'Jagtial')
+
+plot(lmao$Nizambad, lmao$Jagtial)
+fitlmao<- lm(Jagtial~Nizambad, lmao)
+abline(fitlmao, col='red')
+
+
+
+#mk test__________________________________________
+# Example data
+set.seed(123)
+your_data <- data.frame(year = 1:100, value = cumsum(rnorm(100)))
+
+# Perform the Mann-Kendall test
+mk_test_result <- cor.test(your_data$year, your_data$value, method = "kendall")
+
+# Print the test result
+print(mk_test_result)
+
+
+
+
+
+
+
+
